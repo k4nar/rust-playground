@@ -138,7 +138,7 @@ fn main() {
         z: spot.pos.z - inter.z
       };
 
-      pixels[(x * WIDTH + y) as u32] = get_light(sphere, spot, inter, light);
+      pixels[(y * WIDTH + x) as u32] = get_light(sphere, spot, inter, light);
     }
   }
 
