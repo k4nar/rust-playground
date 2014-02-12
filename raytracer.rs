@@ -28,13 +28,6 @@ struct Spot {
   color: Color,
 }
 
-struct Sphere {
-  pos: Point,
-  radius: f64,
-  shininess: f64,
-  color: Color
-}
-
 struct Scene {
   eye: Point,
   spot: Spot,
@@ -59,21 +52,39 @@ fn solve_poly(a: f64, b: f64, c: f64) -> f64 {
   }
 }
 
-fn hit_sphere(sphere: &Sphere, eye: &Point, vector: &Point) -> f64 {
-  let a = vector.x.pow(&2.) + vector.y.pow(&2.) + vector.z.pow(&2.);
-  let b = 2. * (eye.x * vector.x + eye.y * vector.y + eye.z * vector.z);
-  let c = eye.x.pow(&2.) + eye.y.pow(&2.) + eye.z.pow(&2.) - sphere.radius.pow(&2.);
-  return solve_poly(a, b, c);
+trait Shape {
+  fn hit(&self, eye: &Point, vector: &Point) -> f64;
+  fn get_perp(&self, inter: &Point) -> ~Point;
+}
+
+struct Sphere {
+  pos: Point,
+  radius: f64,
+  shininess: f64,
+  color: Color
+}
+
+impl Shape for Sphere {
+  fn hit(&self, eye: &Point, vector: &Point) -> f64 {
+    let a = vector.x.pow(&2.) + vector.y.pow(&2.) + vector.z.pow(&2.);
+    let b = 2. * (eye.x * vector.x + eye.y * vector.y + eye.z * vector.z);
+    let c = eye.x.pow(&2.) + eye.y.pow(&2.) + eye.z.pow(&2.) - self.radius.pow(&2.);
+    return solve_poly(a, b, c);
+  }
+
+  fn get_perp(&self, inter: &Point) -> ~Point {
+    ~Point { x: inter.x, y: inter.y, z: inter.z }
+  }
 }
 
 fn get_closest(obj: &Sphere, eye: &Point, vector: &Point) -> f64 {
   let e = ~Point { x: eye.x - obj.pos.x, y: eye.y - obj.pos.y, z: eye.z - obj.pos.z };
   let v = ~Point { x: vector.x, y: vector.y, z: vector.z };
-  return hit_sphere(obj, e, v);
+  return obj.hit(e, v);
 }
 
 fn get_light(obj: &Sphere, spot: &Spot, inter: &Point, light: &Point) -> Color {
-  let perp = Point { x: inter.x, y: inter.y, z: inter.z };
+  let perp = obj.get_perp(inter);
   let norme_l = sqrt(light.x.pow(&2.) + light.y.pow(&2.) + light.z.pow(&2.));
   let norme_n = sqrt(perp.x.pow(&2.) + perp.y.pow(&2.) + perp.z.pow(&2.));
   let cos_a = (light.x * perp.x + light.y * perp.y + light.z * perp.z) / (norme_l * norme_n);
@@ -108,11 +119,10 @@ fn main() {
     for y in range(0., HEIGHT) {
       let vector = ~Point {
         x: 100.,
-        y: (WIDTH / 2. - x),
-        z: (HEIGHT / 2. - y)
+        y: WIDTH / 2. - x,
+        z: HEIGHT / 2. - y
       };
 
-      // Always 0 :'(
       let closest = get_closest(sphere, eye, vector);
 
       // // Shadow
@@ -146,7 +156,7 @@ fn main() {
     width: WIDTH as u32,
     height: HEIGHT as u32,
     color_type: png::RGB8,
-    pixels: pixels.flat_map(|&Color { r: r, g: g, b: b }| { ~[r, g, b] })
+    pixels: pixels.flat_map(|&Color { r, g, b }| { ~[r, g, b] })
   };
 
   png::store_png(&img, &Path::new("out.png"));
