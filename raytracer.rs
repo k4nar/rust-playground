@@ -2,8 +2,8 @@ extern mod png;
 
 use std::num::{sqrt, min, max, cos, sin};
 
-static WIDTH: f64 = 800.;
-static HEIGHT: f64 = 800.;
+static WIDTH: int = 800;
+static HEIGHT: int = 800;
 
 struct Color {
   r: u8,
@@ -41,14 +41,14 @@ fn solve_poly(a: f64, b: f64, c: f64) -> f64 {
     return 0.;
   }
 
-  let k1 = (-b - sqrt(delta)) / (2. * a);
-  let k2 = (-b + sqrt(delta)) / (2. * a);
-
-  return match (k1, k2) {
-    (k1, k2) if k1 < 0. && k2 < 0. => 0.,
-    (k1, k2) if k2 <= 0. => k1,
-    (k1, k2) if k1 <= 0. => k2,
-    _ => min(k1, k2)
+  let sign = match c {
+    _ if c < 0. => 1.,
+    _ => -1.
+  };
+  let k = (-b + sign * sqrt(delta)) / (2. * a);
+  return match k {
+    _ if k > 0. => k,
+    _ => 0.
   }
 }
 
@@ -109,18 +109,18 @@ fn main() {
     color: White
   };
   let sphere = ~Sphere {
-    pos: Point { x: 0., y: 0., z: 0. },
+    pos: Point { x: 0., y: 0., z: 100. },
     radius: 160.,
     shininess: 0.2,
     color: Red
   };
 
-  for x in range(0., WIDTH) {
-    for y in range(0., HEIGHT) {
+  for x in range(0, WIDTH) {
+    for y in range(0, HEIGHT) {
       let vector = ~Point {
         x: 100.,
-        y: WIDTH / 2. - x,
-        z: HEIGHT / 2. - y
+        y: (WIDTH / 2 - x) as f64,
+        z: (HEIGHT / 2 - y) as f64
       };
 
       let closest = get_closest(sphere, eye, vector);
@@ -148,7 +148,10 @@ fn main() {
         z: spot.pos.z - inter.z
       };
 
-      pixels[(y * WIDTH + x) as u32] = get_light(sphere, spot, inter, light);
+      pixels[y * WIDTH + x] = match closest {
+        0. => Black,
+        _ => get_light(sphere, spot, inter, light)
+      }
     }
   }
 
