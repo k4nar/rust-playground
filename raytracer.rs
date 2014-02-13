@@ -31,7 +31,7 @@ struct Spot {
 struct Scene {
   eye: Point,
   spot: Spot,
-  sphere: Sphere
+  objects: ~[Shape]
 }
 
 fn solve_poly(a: f64, b: f64, c: f64) -> f64 {
@@ -52,19 +52,42 @@ fn solve_poly(a: f64, b: f64, c: f64) -> f64 {
   }
 }
 
-trait Shape {
+trait Drawable {
   fn hit(&self, eye: &Point, vector: &Point) -> f64;
-  fn get_perp(&self, inter: &Point) -> ~Point;
+  fn perp(&self, inter: &Point) -> ~Point;
+}
+
+struct Shape {
+  pos: Point,
+  shininess: f64,
+  color: Color,
+  shape: ~Drawable
+}
+
+impl Shape {
+  fn get_light(&self, spot: &Spot, inter: &Point, light: &Point) -> Color {
+    let perp = self.shape.perp(inter);
+    let norme_l = sqrt(light.x.pow(&2.) + light.y.pow(&2.) + light.z.pow(&2.));
+    let norme_n = sqrt(perp.x.pow(&2.) + perp.y.pow(&2.) + perp.z.pow(&2.));
+    let cos_a = (light.x * perp.x + light.y * perp.y + light.z * perp.z) / (norme_l * norme_n);
+
+    if cos_a <= 0. {
+      return Black;
+    }
+
+    Color {
+      r: ((self.color.r as f64) * cos_a * (1. - self.shininess) + (spot.color.r as f64) * cos_a * self.shininess) as u8,
+      g: ((self.color.g as f64) * cos_a * (1. - self.shininess) + (spot.color.g as f64) * cos_a * self.shininess) as u8,
+      b: ((self.color.b as f64) * cos_a * (1. - self.shininess) + (spot.color.b as f64) * cos_a * self.shininess) as u8
+    }
+  }
 }
 
 struct Sphere {
-  pos: Point,
   radius: f64,
-  shininess: f64,
-  color: Color
 }
 
-impl Shape for Sphere {
+impl Drawable for Sphere {
   fn hit(&self, eye: &Point, vector: &Point) -> f64 {
     let a = vector.x.pow(&2.) + vector.y.pow(&2.) + vector.z.pow(&2.);
     let b = 2. * (eye.x * vector.x + eye.y * vector.y + eye.z * vector.z);
@@ -72,47 +95,47 @@ impl Shape for Sphere {
     return solve_poly(a, b, c);
   }
 
-  fn get_perp(&self, inter: &Point) -> ~Point {
+  fn perp(&self, inter: &Point) -> ~Point {
     ~Point { x: inter.x, y: inter.y, z: inter.z }
   }
 }
 
-fn get_closest(obj: &Sphere, eye: &Point, vector: &Point) -> f64 {
-  let e = ~Point { x: eye.x - obj.pos.x, y: eye.y - obj.pos.y, z: eye.z - obj.pos.z };
-  let v = ~Point { x: vector.x, y: vector.y, z: vector.z };
-  return obj.hit(e, v);
-}
+impl Scene {
+  fn get_closest<'a>(&'a self, vector: &'a Point) -> (Option<&'a Shape>, f64) {
+    let mut min: f64 = 0.;
+    let mut closest: Option<&'a Shape> = None;
 
-fn get_light(obj: &Sphere, spot: &Spot, inter: &Point, light: &Point) -> Color {
-  let perp = obj.get_perp(inter);
-  let norme_l = sqrt(light.x.pow(&2.) + light.y.pow(&2.) + light.z.pow(&2.));
-  let norme_n = sqrt(perp.x.pow(&2.) + perp.y.pow(&2.) + perp.z.pow(&2.));
-  let cos_a = (light.x * perp.x + light.y * perp.y + light.z * perp.z) / (norme_l * norme_n);
+    for obj in self.objects.iter() {
+      let e = Point { x: self.eye.x - obj.pos.x, y: self.eye.y - obj.pos.y, z: self.eye.z - obj.pos.z };
+      let v = Point { x: vector.x, y: vector.y, z: vector.z };
+      let k = obj.shape.hit(&e, &v);
+      if k != 0. && (min == 0. || k < min) {
+        min = k;
+        closest = Some(obj);
+      }
+    }
 
-  if cos_a <= 0. {
-    return Black;
-  }
-
-  Color {
-    r: ((obj.color.r as f64) * cos_a * (1. - obj.shininess) + (spot.color.r as f64) * cos_a * obj.shininess) as u8,
-    g: ((obj.color.g as f64) * cos_a * (1. - obj.shininess) + (spot.color.g as f64) * cos_a * obj.shininess) as u8,
-    b: ((obj.color.b as f64) * cos_a * (1. - obj.shininess) + (spot.color.b as f64) * cos_a * obj.shininess) as u8
+    return (closest, min);
   }
 }
 
 fn main() {
   let mut pixels = ~[Black, ..((WIDTH * HEIGHT) as uint)];
 
-  let eye = ~Point { x: -300., y: 0., z: 200. };
-  let spot = ~Spot {
-    pos: Point { x: -300., y: 100., z: 200. },
-    color: White
-  };
-  let sphere = ~Sphere {
-    pos: Point { x: 0., y: 0., z: 100. },
-    radius: 160.,
-    shininess: 0.2,
-    color: Red
+  let scene = ~Scene {
+    eye: Point { x: -300., y: 0., z: 200. },
+    spot: Spot {
+      pos: Point { x: -300., y: 100., z: 200. },
+      color: White
+    },
+    objects: ~[
+      Shape {
+        pos: Point { x: 0., y: 0., z: 100. },
+        shininess: 0.2,
+        color: Red,
+        shape: ~Sphere { radius: 160. }
+      },
+    ]
   };
 
   for x in range(0, WIDTH) {
@@ -123,34 +146,41 @@ fn main() {
         z: (HEIGHT / 2 - y) as f64
       };
 
-      let closest = get_closest(sphere, eye, vector);
+      let (obj, k) = scene.get_closest(vector);
 
-      // // Shadow
-      // let inter = Point {
-      //   x: eye.x + closest * vector.x,
-      //   y: eye.y + closest * vector.y,
-      //   z: eye.z + closest * vector.z
-      // };
-      // let light = Point {
-      //   x: spot.pos.x - inter.x,
-      //   y: spot.pos.y - inter.y,
-      //   z: spot.pos.z - inter.z
-      // };
+      if obj.is_none() {
+        pixels[y * WIDTH + x] = Black;
+      }
+      else {
+        let closest = obj.unwrap();
 
-      let inter = ~Point {
-        x: (eye.x - sphere.pos.x) + closest * vector.x,
-        y: (eye.y - sphere.pos.y) + closest * vector.y,
-        z: (eye.z - sphere.pos.z) + closest * vector.z
-      };
-      let light = ~Point {
-        x: spot.pos.x - inter.x,
-        y: spot.pos.y - inter.y,
-        z: spot.pos.z - inter.z
-      };
+        // // Shadow
+        // let inter = Point {
+        //   x: eye.x + closest * vector.x,
+        //   y: eye.y + closest * vector.y,
+        //   z: eye.z + closest * vector.z
+        // };
+        // let light = Point {
+        //   x: spot.pos.x - inter.x,
+        //   y: spot.pos.y - inter.y,
+        //   z: spot.pos.z - inter.z
+        // };
 
-      pixels[y * WIDTH + x] = match closest {
-        0. => Black,
-        _ => get_light(sphere, spot, inter, light)
+        let inter = ~Point {
+          x: (scene.eye.x - closest.pos.x) + k * vector.x,
+          y: (scene.eye.y - closest.pos.y) + k * vector.y,
+          z: (scene.eye.z - closest.pos.z) + k * vector.z
+        };
+        let light = ~Point {
+          x: scene.spot.pos.x - inter.x,
+          y: scene.spot.pos.y - inter.y,
+          z: scene.spot.pos.z - inter.z
+        };
+
+        pixels[y * WIDTH + x] = match k {
+          0. => Black,
+          _ => closest.get_light(&scene.spot, inter, light)
+        }
       }
     }
   }
