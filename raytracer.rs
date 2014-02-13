@@ -100,6 +100,21 @@ impl Drawable for Sphere {
   }
 }
 
+struct Plane;
+
+impl Drawable for Plane {
+  fn hit(&self, eye: &Point, vector: &Point) -> f64 {
+    match -eye.z / vector.z {
+      k if k > 0. => k,
+      _ => 0.
+    }
+  }
+
+  fn perp(&self, inter: &Point) -> ~Point {
+    ~Point { x: 0., y: 0., z: 100. }
+  }
+}
+
 impl Scene {
   fn get_closest<'a>(&'a self, vector: &'a Point) -> (Option<&'a Shape>, f64) {
     let mut min: f64 = 0.;
@@ -129,11 +144,17 @@ fn main() {
       color: White
     },
     objects: ~[
+      // Shape {
+      //   pos: Point { x: 0., y: 0., z: 100. },
+      //   shininess: 0.2,
+      //   color: Red,
+      //   shape: ~Sphere { radius: 160. }
+      // },
       Shape {
-        pos: Point { x: 0., y: 0., z: 100. },
-        shininess: 0.2,
-        color: Red,
-        shape: ~Sphere { radius: 160. }
+        pos: Point { x: 0., y: 0., z: 0.},
+        shininess: 0.1,
+        color: Green,
+        shape: ~Plane
       },
     ]
   };
